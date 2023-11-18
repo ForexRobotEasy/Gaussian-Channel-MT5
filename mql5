@@ -1,0 +1,100 @@
+
+//+------------------------------------------------------------------+
+//|                                                  Gaussian Channel |
+//|                                                forexroboteasy.com |
+//|                                            Developed by Forex Robot Easy Team |
+//+------------------------------------------------------------------+
+
+//--- Include necessary libraries
+#include <Trade\Trade.mqh>
+
+//--- Define input parameters
+input double FilterPeriod = 10; // Filter period for the Ehlers Gaussian Filter method
+
+//--- Initialize global variables
+CTrade trade;
+
+//+------------------------------------------------------------------+
+//| Custom indicator initialization function                         |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   //--- Initialize necessary indicators and settings
+   IndicatorShortName('Gaussian Channel');
+   SetIndexStyle(0, DRAW_LINE);
+   SetIndexBuffer(0, ExtMapBuffer1);
+   SetIndexEmptyValue(0, 0.0);
+   
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Custom indicator iteration function                              |
+//+------------------------------------------------------------------+
+int OnCalculate(const int rates_total,
+                const int prev_calculated,
+                const datetime &time[],
+                const double &open[],
+                const double &high[],
+                const double &low[],
+                const double &close[],
+                const long &tick_volume[],
+                const long &volume[],
+                const int &spread[])
+{
+   //--- Calculate the Gaussian Channel using the Ehlers Gaussian Filter method
+   for(int i = prev_calculated; i < rates_total; i++)
+   {
+      double sum = 0.0;
+      double weightSum = 0.0;
+      
+      for(int j = 0; j < FilterPeriod; j++)
+      {
+         double weight = MathExp(-0.5 * MathPow((j - FilterPeriod / 2) / FilterPeriod, 2));
+         
+         sum += close[i-j] * weight;
+         weightSum += weight;
+      }
+      
+      double gaussian = sum / weightSum;
+      
+      ExtMapBuffer1[i] = gaussian;
+   }
+   
+   //--- Determine the trend strength and identify bearish phases
+   double prev_gaussian = ExtMapBuffer1[rates_total - 2];
+   double curr_gaussian = ExtMapBuffer1[rates_total - 1];
+   
+   double trend_strength = MathAbs(curr_gaussian - prev_gaussian);
+   
+   bool bearish_phase = (curr_gaussian < prev_gaussian);
+   
+   //--- Output the trend identification information
+   if(bearish_phase)
+      Print('Bearish Phase Detected. Trend Strength: ', trend_strength);
+   else
+      Print('No Bearish Phase Detected. Trend Strength: ', trend_strength);
+   
+   //--- Perform trading decisions based on the trend identification
+   if(bearish_phase)
+   {
+      // Place a sell order or close existing buy orders
+      trade.Sell(Symbol(), 0.01);
+   }
+   else
+   {
+      // Place a buy order or close existing sell orders
+      trade.Buy(Symbol(), 0.01);
+   }
+   
+   return(rates_total);
+}
+
+//+------------------------------------------------------------------+
+//| Custom indicator deinitialization function                       |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+   //--- Clean up any resources or open trades
+   trade.PositionCloseAll();
+}
